@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBSポン出しツール</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <header class="header">
+            <h1>OBSポン出しツール</h1>
+            <div class="controls">
+                <button id="settings-btn">⚙️ 設定</button>
+                <button id="stop-all-btn">⏹️ 全停止</button>
+                <div class="master-volume">
+                    <label for="master-volume">マスター:</label>
+                    <input type="range" id="master-volume" min="0" max="1" step="0.01" value="1">
+                </div>
+            </div>
+        </header>
+
+        <main id="sound-board" class="sound-board">
+            <!-- サウンドボタンはここに動的に追加されます -->
+        </main>
+
+        <div id="settings-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-btn">&times;</span>
+                <h2>設定</h2>
+                <div class="setting-item">
+                    <label for="columns-input">カラム数:</label>
+                    <input type="number" id="columns-input" min="1" max="10" value="3">
+                </div>
+                 <div class="setting-item">
+                    <button id="add-sound-btn">＋ 音声ファイルを追加</button>
+                    <input type="file" id="file-input" accept="audio/*" multiple style="display: none;">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
