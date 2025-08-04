@@ -44,14 +44,12 @@ wss.on('connection', (ws, req) => {
     console.log(`Client connected: ${ws.isObs ? 'OBS Player' : 'Remote Control'}`);
 
     ws.on('message', (message) => {
-        // リモコンからのメッセージで、かつOBSクライアントが接続している場合のみ転送
-        if (!ws.isObs) {
-            wss.clients.forEach(client => {
-                if (client.isObs && client.readyState === client.OPEN) {
-                    client.send(message.toString());
-                }
-            });
-        }
+        // メッセージを他の全てのクライアントにブロードキャストする
+        wss.clients.forEach(client => {
+            if (client !== ws && client.readyState === client.OPEN) {
+                client.send(message.toString());
+            }
+        });
     });
 
     ws.on('close', () => {

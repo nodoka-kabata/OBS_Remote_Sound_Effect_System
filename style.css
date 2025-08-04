@@ -31,6 +31,11 @@ body {
     font-size: 1.4em;
 }
 
+.controls {
+    display: flex;
+    align-items: center;
+}
+
 .controls button {
     margin-left: 10px;
     padding: 10px 15px;
@@ -40,6 +45,7 @@ body {
     background-color: #444;
     color: white;
     font-size: 1em;
+    white-space: nowrap; /* ボタンテキストの改行を防ぐ */
 }
 
 .master-volume {
@@ -69,12 +75,17 @@ body {
     align-items: center;
     min-height: 100px; /* 高さを確保 */
     padding: 10px;
+    transition: background-color 0.2s ease, filter 0.2s ease;
+}
+
+.sound-btn.playing {
+    filter: brightness(0.6); /* 再生中は少し暗くする */
 }
 
 .sound-btn .btn-name {
     font-size: 1.2em;
     font-weight: bold;
-    padding: 10px; /* タップ領域を確保 */
+    padding: 10px;
     flex-grow: 1;
     display: flex;
     align-items: center;
@@ -84,32 +95,43 @@ body {
 
 /* --- コントロールの表示/非表示 --- */
 .sound-btn .controls-wrapper {
-    display: none; /* デフォルトでは非表示 */
+    display: none;
     width: 100%;
     padding: 10px 0;
     background: rgba(0,0,0,0.2);
 }
 
-.sound-btn.show-controls .controls-wrapper {
-    display: block; /* show-controlsクラスが付与されたら表示 */
-}
-
-.sound-btn.show-controls .btn-name {
-    flex-grow: 0;
+.volume-adjust-mode .sound-btn .controls-wrapper {
+    display: block;
 }
 
 .sound-btn .volume-slider {
     width: 80%;
 }
 
-.sound-btn .remove-btn {
-    background: #d9534f;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    padding: 5px 10px;
+/* --- カラープリセット --- */
+.color-presets {
+    display: none; /* 通常は非表示 */
+    justify-content: center;
+    gap: 8px;
     margin-top: 10px;
+}
+
+.volume-adjust-mode .color-presets {
+    display: flex; /* 音量調整モードで表示 */
+}
+
+.color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
     cursor: pointer;
+    border: 2px solid white;
+    transition: transform 0.1s ease;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
 }
 
 /* Modal styles */
@@ -158,4 +180,41 @@ body {
     background-color: #444;
     color: white;
     box-sizing: border-box;
+}
+
+/* 音量調整モード */
+.volume-adjust-mode .sound-btn .btn-name {
+    flex-grow: 0;
+}
+
+.volume-adjust-mode .sound-btn {
+    cursor: default;
+}
+
+/* --- レスポンシブ対応 --- */
+@media (max-width: 600px) {
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .controls {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .controls button, .master-volume {
+        margin-left: 0; /* マージンをリセット */
+    }
+
+    .sound-board {
+        /* スマホではデフォルトで2カラムに */
+        grid-template-columns: repeat(var(--columns, 2), 1fr);
+    }
+
+    .modal-content {
+        width: 95%;
+        margin: 20% auto;
+    }
 }
