@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.querySelector('.container');
     let audioContext;
     const sounds = {}; // Store audio buffers and nodes
+    let globalSettings = {}; // Store settings from server
     let ws;
 
     // --- WebSocket Connection ---
@@ -18,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         ws.onerror = (err) => console.error('WebSocket Error:', err);
 
-        // Listen for messages from the server (both OBS and Remote)
         ws.onmessage = (event) => {
             try {
                 const command = JSON.parse(event.data);
@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // --- Command Sender (for Remote and OBS) ---
+    // --- Command Sender ---
     function sendCommand(command) {
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(command));
@@ -55,11 +55,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: file,
                 src: `sounds/${file}`,
                 gainNode: gainNode,
-                volume: 1,
+                volume: 1, // Default volume
                 buffer: null,
-                source: null // To keep track of the current source
+                source: null
             };
         }
+        // Apply initial settings once sounds are loaded
+        applyAllSettings(globalSettings);
     }
 
     async function loadSound(soundId) {
@@ -76,42 +78,133 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function playSound(soundId) {
         const sound = sounds[soundId];
-        if (!sound || !sound.buffer) {
+        if (!sound) return;
+
+        // Load the sound if it's not already loaded
+        if (!sound.buffer) {
             loadSound(soundId).then(() => {
-                if(sound.buffer) playSound(soundId);
+                if (sound.buffer) playSound(soundId); // Retry playing after loading
             });
             return;
         }
 
-        // Stop existing sound if it's playing
+        // Stop the currently playing instance of the same sound to allow for re-triggering
         if (sound.source) {
-            sound.source.onended = null; // Remove previous listener
+            sound.source.onended = null; // Remove the event listener to prevent unwanted side-effects
             sound.source.stop();
         }
 
+        // Create a new buffer source for each playback
         const source = audioContext.createBufferSource();
         source.buffer = sound.buffer;
         source.connect(sound.gainNode);
         source.start(0);
+
+        // Keep track of the new source
         sound.source = source;
 
-        // Notify remotes that sound has started
+        // Notify remotes that the sound has started
         sendCommand({ action: 'sound_started', soundId });
 
+        // Set up the onended event for the new source
         source.onended = () => {
-            // Notify remotes that sound has ended
-            sendCommand({ action: 'sound_ended', soundId });
-            sound.source = null;
+            // Check if this is the currently active source before clearing
+            if (sound.source === source) {
+                sendCommand({ action: 'sound_ended', soundId });
+                sound.source = null;
+            }
         };
     }
 
-    // --- Command Handler (for both OBS and Remote) ---
+
+    // --- Settings Application ---
+    function applyAllSettings(settings) {
+        globalSettings = settings;
+        if (isObs) {
+            // Apply master volume
+            const masterVolume = settings.masterVolume || 1;
+            sounds.masterVolume = masterVolume;
+            // Apply individual sound volumes
+            Object.keys(settings.sounds || {}).forEach(soundId => {
+                const soundSettings = settings.sounds[soundId];
+                const sound = sounds[soundId];
+                if (sound && soundSettings) {
+                    sound.volume = soundSettings.volume || 1;
+                    if(sound.gainNode) sound.gainNode.gain.value = sound.volume * masterVolume;
+                }
+            });
+        } else {
+            // Apply UI settings for remote
+            const soundBoard = document.getElementById('sound-board');
+            const masterVolumeSlider = document.getElementById('master-volume');
+            const columnsInput = document.getElementById('columns-input');
+
+            if (masterVolumeSlider) masterVolumeSlider.value = settings.masterVolume || 1;
+            if (columnsInput) columnsInput.value = settings.columns || 3;
+            if (soundBoard) soundBoard.style.setProperty('--columns', settings.columns || 3);
+
+            Object.keys(settings.sounds || {}).forEach(soundId => {
+                const soundSettings = settings.sounds[soundId];
+                const button = document.querySelector(`.sound-btn[data-id="${soundId}"]`);
+                if (button) {
+                    if (soundSettings.color) button.style.backgroundColor = soundSettings.color;
+                    const volumeSlider = button.querySelector('.volume-slider');
+                    if (volumeSlider) volumeSlider.value = soundSettings.volume || 1;
+                }
+            });
+        }
+    }
+
+    function applySettingChange({ soundId, setting, value }) {
+         if (soundId) { // Sound-specific setting
+            const sound = sounds[soundId];
+            const button = document.querySelector(`.sound-btn[data-id="${soundId}"]`);
+            if (setting === 'volume') {
+                if (isObs && sound) {
+                    sound.volume = value;
+                    sound.gainNode.gain.value = sound.volume * (sounds.masterVolume || 1);
+                } else if(button) {
+                    const volumeSlider = button.querySelector('.volume-slider');
+                    if (volumeSlider) volumeSlider.value = value;
+                }
+            }
+            if (setting === 'color' && button) {
+                button.style.backgroundColor = value;
+            }
+        } else { // Global setting
+            if (setting === 'masterVolume') {
+                if (isObs) {
+                    sounds.masterVolume = value;
+                    Object.values(sounds).forEach(s => {
+                        if(s.gainNode) s.gainNode.gain.value = s.volume * value;
+                    });
+                } else {
+                    const masterVolumeSlider = document.getElementById('master-volume');
+                    if (masterVolumeSlider) masterVolumeSlider.value = value;
+                }
+            }
+             if (setting === 'columns') {
+                const soundBoard = document.getElementById('sound-board');
+                if (soundBoard) soundBoard.style.setProperty('--columns', value);
+            }
+        }
+    }
+
+
+    // --- Command Handler ---
     function handleCommand(command) {
-        const { action, soundId, volume, masterVolume } = command;
-        const sound = sounds[soundId];
+        const { action, soundId, settings, setting, value } = command;
+
+        if (action === 'settings_initialized' || action === 'settings_updated') {
+            applyAllSettings(settings);
+            return;
+        }
+        if (action === 'setting_changed') {
+            applySettingChange({ soundId, setting, value });
+            return;
+        }
 
         if (isObs) {
-            // OBS handles audio playback commands
             switch (action) {
                 case 'play':
                     playSound(soundId);
@@ -119,29 +212,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'stopAll':
                     Object.values(sounds).forEach(s => {
                         if (s.source) {
-                            s.source.onended = null; // Avoid sending ended event on manual stop
+                            s.source.onended = null;
                             s.source.stop();
                             s.source = null;
-                            // Manually notify of stop
                             sendCommand({ action: 'sound_ended', soundId: s.id });
                         }
                     });
                     break;
-                case 'setVolume':
-                    if (sound) {
-                        sound.volume = volume;
-                        sound.gainNode.gain.value = sound.volume * (sounds.masterVolume || 1);
-                    }
-                    break;
-                case 'setMasterVolume':
-                    sounds.masterVolume = masterVolume;
-                    Object.values(sounds).forEach(s => {
-                        if(s.gainNode) s.gainNode.gain.value = s.volume * sounds.masterVolume;
-                    });
-                    break;
+                // Volume setting is now handled by 'setting_changed'
             }
         } else {
-            // Remote handles UI update commands
             const button = document.querySelector(`.sound-btn[data-id="${soundId}"]`);
             if (!button) return;
 
@@ -174,18 +254,14 @@ document.addEventListener('DOMContentLoaded', () => {
             button.className = 'sound-btn';
             button.dataset.id = sound.id;
 
-            // Load saved color or use default
-            const savedColor = localStorage.getItem(`color_${sound.id}`);
-            button.style.backgroundColor = savedColor || colorPresets[0];
-
-            const presetsHTML = colorPresets.map(color => 
+            const presetsHTML = colorPresets.map(color =>
                 `<div class="color-swatch" style="background-color: ${color};" data-color="${color}"></div>`
             ).join('');
 
             button.innerHTML = `
                 <div class="btn-name">${sound.name.replace(/\.[^/.]+$/, "")}</div>
                 <div class="controls-wrapper">
-                    <input type="range" class="volume-slider" min="0" max="1" step="0.01" value="${sound.volume}">
+                    <input type="range" class="volume-slider" min="0" max="1" step="0.01" value="1">
                     <div class="color-presets">${presetsHTML}</div>
                 </div>
             `;
@@ -200,24 +276,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const volumeSlider = button.querySelector('.volume-slider');
             volumeSlider.addEventListener('input', (e) => {
                 const newVolume = parseFloat(e.target.value);
-                sendCommand({ action: 'setVolume', soundId: sound.id, volume: newVolume });
+                sendCommand({ action: 'update_setting', soundId: sound.id, setting: 'volume', value: newVolume });
             });
 
-            // Add event listeners for color swatches
             button.querySelectorAll('.color-swatch').forEach(swatch => {
                 swatch.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevent button click event
+                    e.stopPropagation();
                     const newColor = e.target.dataset.color;
-                    button.style.backgroundColor = newColor;
-                    localStorage.setItem(`color_${sound.id}`, newColor);
+                    sendCommand({ action: 'update_setting', soundId: sound.id, setting: 'color', value: newColor });
                 });
             });
         };
 
         stopAllBtn.addEventListener('click', () => sendCommand({ action: 'stopAll' }));
+
         masterVolumeSlider.addEventListener('input', (e) => {
             const newMasterVolume = parseFloat(e.target.value);
-            sendCommand({ action: 'setMasterVolume', masterVolume: newMasterVolume });
+            sendCommand({ action: 'update_setting', setting: 'masterVolume', value: newMasterVolume });
+        });
+
+        columnsInput.addEventListener('change', (e) => {
+            const newColumns = parseInt(e.target.value, 10);
+            sendCommand({ action: 'update_setting', setting: 'columns', value: newColumns });
         });
 
         volumeModeBtn.addEventListener('click', () => {
@@ -230,15 +310,15 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsBtn.addEventListener('click', () => modal.style.display = 'block');
         closeBtn.addEventListener('click', () => modal.style.display = 'none');
         window.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
-        columnsInput.addEventListener('change', (e) => {
-            soundBoard.style.setProperty('--columns', e.target.value);
-        });
 
         fetch('/sounds').then(res => res.json()).then(files => {
-            files.forEach((file, index) => {
+            soundBoard.innerHTML = ''; // Clear existing buttons
+            files.forEach((file) => {
                 const soundId = `sound-${encodeURIComponent(file)}`;
-                createButton({ id: soundId, name: file, volume: 1, defaultColor: colorPresets[index % colorPresets.length] });
+                createButton({ id: soundId, name: file });
             });
+            // Apply initial settings once buttons are created
+            applyAllSettings(globalSettings);
         });
     }
 

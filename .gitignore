@@ -1,0 +1,16 @@
+# Dependencies
+/node_modules
+
+# User-specific settings
+/settings.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log
+yarn-debug.log
+lerna-debug.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
