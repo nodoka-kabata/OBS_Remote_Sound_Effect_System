@@ -24,6 +24,7 @@ function loadSettings() {
             settings = {
                 masterVolume: 1,
                 columns: 3,
+                playOnRemote: false, // Add this line
                 sounds: {}
             };
             saveSettings();
