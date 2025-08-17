@@ -42,11 +42,18 @@
                     <button id="add-sound-btn">＋ 音声ファイルを追加</button>
                     <input type="file" id="file-input" accept="audio/*" multiple style="display: none;">
                 </div>
+                <div class="setting-item qr-code-container">
+                    <h3>リモコン用URL</h3>
+                    <canvas id="qr-code"></canvas>
+                    <p>スマホでQRコードを読み取ってアクセスしてください。</p>
+                    <p id="remote-url-text"></p>
+                </div>
             </div>
         </div>
 
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

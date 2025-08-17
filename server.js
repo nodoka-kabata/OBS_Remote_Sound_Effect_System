@@ -4,6 +4,7 @@ const path = require('path');
 const http = require('http');
 const os = require('os');
 const { WebSocketServer } = require('ws');
+const qrcode = require('qrcode-terminal');
 
 const app = express();
 const port = 3000; /*起動ポートは必要に応じて変更*/
@@ -52,6 +53,24 @@ app.use(express.json()); // Middleware to parse JSON bodies
 // API to get current settings
 app.get('/api/settings', (req, res) => {
     res.json(settings);
+});
+
+// API to get the remote control URL
+app.get('/api/remote-info', (req, res) => {
+    const networkInterfaces = os.networkInterfaces();
+    let ipAddress = 'localhost';
+
+    Object.keys(networkInterfaces).forEach(ifaceName => {
+        networkInterfaces[ifaceName].forEach(iface => {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                ipAddress = iface.address;
+            }
+        });
+    });
+
+    res.json({
+        remoteUrl: `http://${ipAddress}:${port}`
+    });
 });
 
 // API to update settings
@@ -176,6 +195,8 @@ server.listen(port, '0.0.0.0', () => {
         });
     });
 
+    const remoteUrl = `http://${ipAddress}:${port}`;
+
     console.log(`----------------------------------------`);
     console.log(`  OBSポン出しツール サーバー起動完了`);
     console.log(`  `);
@@ -183,6 +204,11 @@ server.listen(port, '0.0.0.0', () => {
     console.log(`  http://localhost:${port}`);
     console.log(`  `);
     console.log(`  リモコンURL (スマホ等でアクセス):`);
-    console.log(`  http://${ipAddress}:${port}`);
+    console.log(`  ${remoteUrl}`);
     console.log(`----------------------------------------`);
+
+    console.log('↓スマホで読み取ってアクセス↓');
+    qrcode.generate(remoteUrl, {small: true}, function (qrcode) {
+        console.log(qrcode);
+    });
 });
